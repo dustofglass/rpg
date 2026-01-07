@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스탯 및 레벨업 RPG (방어구 추가)</title>
+    <title>스탯 및 레벨업 RPG (전투 기능 복구)</title>
     <!-- Tailwind CSS 로드 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 폰트 로드 -->
@@ -20,13 +20,41 @@
             align-items: center;
             padding: 1rem;
         }
-        /* 메시지 로그 스타일 */
-        #message-log p:nth-child(even) {
-            background-color: #1f2937; /* Gray 800 for stripe effect */
+        
+        .item-btn {
+            transition: all 0.15s;
+            border: 3px solid transparent;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            position: relative;
         }
-        .selected-item {
-            border: 3px solid #00c49f; /* Teal border for selected */
-            background-color: #0d9488;
+        .item-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 등급별 테두리 및 배경 색상 */
+        .grade-legendary { border-color: #fcd34d; background-color: #a16207; } /* Amber */
+        .grade-epic { border-color: #a78bfa; background-color: #5b21b6; } /* Violet */
+        .grade-rare { border-color: #38bdf8; background-color: #0369a1; } /* Sky */
+        .grade-normal { border-color: #6b7280; background-color: #374151; } /* Gray */
+
+        /* 선택된 아이템 스타일 */
+        .selected-weapon { box-shadow: 0 0 0 4px #ec4899; }
+        .selected-armor { box-shadow: 0 0 0 4px #3b82f6; }
+        
+        .stat-badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 0.75rem;
+            padding: 0.1rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: bold;
+        }
+
+        .hp-bar {
+            height: 10px;
+            transition: width 0.5s;
         }
     </style>
 </head>
@@ -39,9 +67,8 @@
         <h1 class="text-3xl font-bold text-teal-400 mb-1 text-center">
             캐릭터 성장 RPG
         </h1>
-        <!-- 개발자 명 추가 -->
         <p class="text-xs text-gray-500 mb-6 text-center">
-            Developed by 최유진
+            랜덤 등급 장비와 스탯 분배
         </p>
         
         <!-- 로딩 화면 -->
@@ -54,9 +81,10 @@
         <div id="selection-screen" class="hidden">
             <p class="text-gray-300 mb-6 text-center">
                 당신의 운명을 결정할 장비를 선택하세요. (무기/방어구 각 1개 필수)
+                <br><span class="text-sm text-yellow-300">등급은 이미 결정되었습니다!</span>
             </p>
 
-            <h2 class="text-xl font-bold text-yellow-400 mb-3 border-b border-gray-700 pb-1">⚔️ 무기 선택</h2>
+            <h2 class="text-xl font-bold text-pink-400 mb-3 border-b border-gray-700 pb-1">⚔️ 무기 선택</h2>
             <div id="weapon-selection-buttons" class="grid grid-cols-3 gap-3 mb-6">
                 <!-- 무기 버튼들이 여기에 생성됩니다 -->
             </div>
@@ -67,7 +95,7 @@
             </div>
 
             <div id="item-details" class="bg-gray-700 p-4 rounded-lg min-h-[100px] flex flex-col justify-center text-gray-400 text-sm">
-                <p class="text-center">장비를 선택하면 상세 정보가 표시됩니다.</p>
+                <p class="text-center">장비를 선택하면 최종 등급 및 상세 정보가 표시됩니다.</p>
             </div>
 
             <button onclick="startGame()" id="start-button" 
@@ -79,13 +107,13 @@
         
         <!-- 3. 스탯 분배 화면 -->
         <div id="stat-screen" class="hidden">
-            <h2 class="text-2xl font-bold text-yellow-400 mb-4 text-center">🌟 레벨업! 스탯 분배</h2>
-            <div class="bg-gray-700 p-4 rounded-lg mb-4">
+            <h2 class="text-2xl font-bold text-yellow-400 mb-4 text-center">🌟 스탯 분배</h2>
+            <div class="bg-gray-700 p-4 rounded-lg mb-6">
                 <p class="text-xl font-bold text-white mb-2">남은 포인트: <span id="stat-points-display" class="text-yellow-300">0</span></p>
-                <p class="text-sm text-gray-400">포인트를 모두 분배해야 전투를 시작할 수 있습니다.</p>
+                <p class="text-sm text-gray-400">남은 포인트가 0이 되어야 다음 단계로 진행할 수 있습니다.</p>
             </div>
 
-            <div id="stats-allocation" class="space-y-3 mb-6">
+            <div id="stats-allocation" class="space-y-4 mb-6">
                 <!-- Stat rows will be injected here -->
             </div>
             
@@ -97,37 +125,64 @@
         </div>
 
 
-        <!-- 4. 게임 플레이 화면 (시작 후) -->
+        <!-- 4. 게임 플레이 화면 (전투) -->
         <div id="game-screen" class="hidden">
-            <!-- 상태 요약 -->
-            <div class="bg-gray-700 p-4 rounded-lg mb-6">
-                <h2 class="text-xl font-semibold text-white mb-3 border-b border-gray-600 pb-2">캐릭터 상태</h2>
-                <div id="status-display" class="grid grid-cols-2 gap-y-2 text-sm">
-                    <!-- 플레이어 및 몬스터 상태 표시 -->
-                </div>
-                <div id="exp-bar" class="w-full bg-gray-600 rounded-full h-2.5 mt-3">
-                    <div id="exp-progress" class="bg-yellow-500 h-2.5 rounded-full text-xs text-black text-right pr-1" style="width: 0%"></div>
-                    <p class="text-xs text-gray-400 mt-1 text-center" id="exp-text">EXP: 0/100</p>
-                </div>
-            </div>
-
-            <!-- 몬스터 시각화 -->
-            <div class="text-center mb-6 p-4 border-2 border-red-500 rounded-lg bg-red-900/30">
-                <div id="monster-icon" class="text-6xl mb-2"></div>
-                <div id="monster-info" class="text-lg font-bold text-red-300"></div>
-            </div>
-
-            <!-- 행동 지침 및 설명 -->
-            <div class="bg-blue-900/30 border-l-4 border-blue-400 p-4 rounded-r-lg mb-6">
-                <h2 class="text-xl font-semibold text-blue-300 mb-2">🔰 행동 지침</h2>
-                <p id="instruction-text" class="text-gray-200 leading-relaxed">
-                    <!-- 게임 시작 후 해야 할 행동 설명이 여기에 표시됩니다. -->
-                </p>
-            </div>
+            <h2 class="text-2xl font-bold text-teal-300 mb-4 text-center">⚔️ 전투 준비 완료 🛡️</h2>
             
+            <!-- 상태 요약 및 HP 바 -->
+            <div class="bg-gray-700 p-4 rounded-lg mb-4">
+                <h2 class="text-xl font-semibold text-white mb-3 border-b border-gray-600 pb-2">
+                    Lv. <span id="player-level-display">1</span> | HP: <span id="current-hp-display">100</span> / <span id="final-hp">100</span>
+                </h2>
+                
+                <!-- HP Bar -->
+                <div class="w-full bg-red-900 rounded-full mb-3">
+                    <div id="hp-bar-fill" class="hp-bar bg-red-500 rounded-full" style="width: 100%;"></div>
+                </div>
+
+                <!-- EXP Bar -->
+                <p class="text-sm text-gray-300">
+                    EXP: <span id="current-exp-display">0</span> / <span id="required-exp-display">100</span>
+                </p>
+                <div class="w-full bg-blue-900 rounded-full">
+                    <div id="exp-bar-fill" class="hp-bar bg-blue-400 rounded-full" style="width: 0%;"></div>
+                </div>
+
+                <div id="status-display" class="grid grid-cols-2 gap-y-1 text-sm mt-3 pt-2 border-t border-gray-600">
+                    <p class="font-bold">STR/DEX/VIT:</p>
+                    <p>
+                        <span id="final-str" class="text-red-300"></span> / 
+                        <span id="final-dex" class="text-yellow-300"></span> / 
+                        <span id="final-vit" class="text-green-300"></span>
+                    </p>
+                    <p class="font-bold text-yellow-300">총 공격력:</p><p id="final-atk"></p>
+                    <p class="font-bold text-blue-300">총 방어력:</p><p id="final-def"></p>
+                </div>
+            </div>
+
+            <!-- 몬스터 정보 표시 (전투 중일 때만) -->
+            <div id="monster-area" class="bg-gray-700 p-4 rounded-lg mb-6 hidden">
+                <h3 class="text-xl font-bold text-red-400 mb-2">
+                    <span id="monster-name-display"></span>
+                </h3>
+                <p class="text-sm text-gray-300">
+                    Lv. <span id="monster-level-display"></span> | HP: <span id="monster-hp-display"></span> / <span id="monster-max-hp-display"></span>
+                </p>
+                <div class="w-full bg-green-900 rounded-full mt-1">
+                    <div id="monster-hp-bar" class="hp-bar bg-green-500 rounded-full" style="width: 100%;"></div>
+                </div>
+            </div>
+
             <!-- 행동 버튼 -->
-            <div id="action-buttons" class="grid grid-cols-2 gap-4 mt-6">
-                <!-- Buttons will be generated by JS -->
+            <div class="mt-6 space-y-3">
+                <button onclick="fightMonster()" id="fight-button"
+                        class="w-full py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-150 ease-in-out disabled:opacity-50">
+                    몬스터와 전투!
+                </button>
+                <button onclick="handleAction('reset')" 
+                        class="w-full py-2 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700 transition duration-150 ease-in-out">
+                    재시작 (선택 화면으로 돌아가기)
+                </button>
             </div>
 
             <!-- 메시지 로그 -->
@@ -139,13 +194,17 @@
 </div>
 
 <script type="module">
-    // ---------------------- FIREBASE IMPORTS ----------------------
+    // ---------------------- FIREBASE IMPORTS (Structure only) ----------------------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     
-    // setLogLevel('Debug'); // 디버깅용
+    // ---------------------- GLOBAL DOM REFERENCES ----------------------
+    let userIdDisplay, loadingScreen, selectionScreen, statScreen, gameScreen;
+    let weaponButtonsContainer, armorButtonsContainer, itemDetails, startButton;
+    let statPointsDisplay, statsAllocation, continueButton;
+    let messageLogElement;
+    let fightButton, monsterArea;
 
     // ---------------------- FIREBASE SETUP ----------------------
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -154,124 +213,133 @@
 
     let db;
     let auth;
-    let playerDocRef = null;
 
     try {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
+        if (Object.keys(firebaseConfig).length > 0) {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        }
     } catch (e) {
         console.error("Firebase Initialization Error:", e);
-        document.getElementById('loading-screen').innerHTML = '<p class="text-red-500">❌ 데이터베이스 연결 오류가 발생했습니다. 콘솔을 확인해주세요.</p>';
     }
 
     // ---------------------- GAME DATA & STATE ----------------------
     let gameState = {
         isAuthReady: false,
         userId: null,
-        currentScreen: 'loading', // 'loading', 'selection', 'stat', 'playing'
-        selectedWeapon: null,
-        selectedArmor: null, // 방어구 상태 추가
+        currentScreen: 'loading',
+        selectedWeapon: null, 
+        selectedArmor: null,  
         
-        // RPG Stat additions (Default values)
         level: 1,
-        exp: 0,
-        expToNextLevel: 100,
-        statPoints: 0,
-        baseStats: {
-            STR: 10, // Strength: Attack power
-            DEX: 10, // Dexterity: Defense/Accuracy
-            VIT: 10  // Vitality: HP
-        },
-        playerMaxHP: 100,
-        playerHP: 100,
-
-        monster: {
-            name: "굶주린 고블린",
-            hp: 20,
-            attack: 5,
-            expReward: 50,
-            emoji: '👹',
-        },
-        monsterDistance: 0, // 1m ~ 5m
+        statPoints: 5, 
+        baseStats: { STR: 10, DEX: 10, VIT: 10 },
+        
+        // New battle state
+        playerMaxHP: 0, 
+        currentHP: 0,
+        currentEXP: 0,
+        requiredEXP: 100, // Level 2
     };
 
-    // 무기 데이터 정의 (등급 및 스탯 보너스)
-    const availableWeapons = {
-        'Sword_C': {
-            name: '낡은 검', grade: 'Common', attack: 10, range: 1, 
-            desc: '균형 잡힌 근접 무기. 공격력은 STR에 비례합니다.', icon: '🗡️',
-            statBonus: { STR: 0, DEX: 0 }, baseKey: 'Sword'
-        },
-        'Spear_U': {
-            name: '강철 창', grade: 'Uncommon', attack: 12, range: 2, 
-            desc: '중거리에서 효과적. Uncommon 등급으로 기본 스탯이 높습니다.', icon: '🔱',
-            statBonus: { STR: 1, DEX: 0 }, baseKey: 'Spear'
-        },
-        'Bow_R': {
-            name: '명장의 장궁', grade: 'Rare', attack: 8, range: 5, 
-            desc: '장거리 전문가. DEX 스탯으로 위력이 크게 증가합니다.', icon: '🏹',
-            statBonus: { STR: 0, DEX: 2 }, baseKey: 'Bow'
-        }
+    let randomizedWeapons = null; 
+    let randomizedArmors = null;  
+    let currentMonster = null; // 현재 전투 중인 몬스터 객체
+
+    // ---------------------- CONSTANTS ----------------------
+    const GRADE_MAP = [
+        { name: "전설", multiplier: 2.0, color: "text-yellow-400", tailwindClass: "grade-legendary", weight: 5 },
+        { name: "영웅", multiplier: 1.5, color: "text-purple-400", tailwindClass: "grade-epic", weight: 15 },
+        { name: "희귀", multiplier: 1.2, color: "text-blue-400", tailwindClass: "grade-rare", weight: 30 },
+        { name: "일반", multiplier: 1.0, color: "text-gray-400", tailwindClass: "grade-normal", weight: 50 },
+    ];
+    
+    const baseWeapons = {
+        'Sword': { name: '장검', baseAttack: 10, baseDefense: 2, desc: '균형 잡힌 근접 무기.', icon: '🗡️', statBonus: { STR: 0, DEX: 0 } },
+        'Spear': { name: '강철 창', baseAttack: 12, baseDefense: 1, desc: '중거리에서 효과적.', icon: '🔱', statBonus: { STR: 1, DEX: 0 } },
+        'Bow': { name: '장궁', baseAttack: 8, baseDefense: 0, desc: '장거리 전문가.', icon: '🏹', statBonus: { STR: 0, DEX: 2 } },
     };
     
-    // 방어구 데이터 정의 (등급, 방어력 및 스탯 보너스 추가)
-    const availableArmors = {
-        'Leather_C': {
-            name: '허름한 가죽 갑옷', grade: 'Common', defense: 3, 
-            desc: '기본 방어구. DEX에 작은 보너스가 있습니다.', icon: '🎽',
-            statBonus: { DEX: 1, VIT: 0 }, baseKey: 'Leather'
-        },
-        'Chain_U': {
-            name: '사슬 갑옷', grade: 'Uncommon', defense: 6, 
-            desc: '무거운 갑옷. VIT에 약간의 보너스가 있습니다.', icon: '⛓️',
-            statBonus: { DEX: 0, VIT: 1 }, baseKey: 'Chain'
-        },
-        'Plate_R': {
-            name: '견고한 판금 갑옷', grade: 'Rare', defense: 10, 
-            desc: '최고의 방어력. VIT 보너스가 높습니다.', icon: '🛡️',
-            statBonus: { DEX: 0, VIT: 2 }, baseKey: 'Plate'
-        }
+    const baseArmors = {
+        'Plate': { name: '판금 갑옷', baseAttack: 0, baseDefense: 15, desc: '최고의 방어력.', icon: '🛡️', statBonus: { DEX: 0, VIT: 2 } },
+        'Leather': { name: '가죽 갑옷', baseAttack: 2, baseDefense: 10, desc: '균형 잡힌 방어구.', icon: '🥼', statBonus: { DEX: 1, VIT: 1 } },
+        'Robe': { name: '마법사 로브', baseAttack: 4, baseDefense: 8, desc: '유연하고 가벼움.', icon: '🧙', statBonus: { DEX: 2, VIT: 0 } },
     };
 
-
-    // ---------------------- DOM CACHING ----------------------
-    const loadingScreen = document.getElementById('loading-screen');
-    const selectionScreen = document.getElementById('selection-screen');
-    const statScreen = document.getElementById('stat-screen');
-    const gameScreen = document.getElementById('game-screen');
-    const weaponButtonsContainer = document.getElementById('weapon-selection-buttons');
-    const armorButtonsContainer = document.getElementById('armor-selection-buttons');
-    const itemDetails = document.getElementById('item-details');
-    const startButton = document.getElementById('start-button');
-    const statusDisplay = document.getElementById('status-display');
-    const instructionText = document.getElementById('instruction-text');
-    const monsterIcon = document.getElementById('monster-icon');
-    const monsterInfo = document.getElementById('monster-info');
-    const actionButtonsContainer = document.getElementById('action-buttons');
-    const messageLogElement = document.getElementById('message-log');
-    const userIdDisplay = document.getElementById('user-id-display');
-    const statPointsDisplay = document.getElementById('stat-points-display');
-    const statsAllocation = document.getElementById('stats-allocation');
-    const continueButton = document.getElementById('continue-button');
-
+    const MONSTERS = [
+        { name: "슬라임", baseHp: 30, baseAtk: 5, baseDef: 0, expReward: 50 },
+        { name: "고블린", baseHp: 50, baseAtk: 10, baseDef: 5, expReward: 100 },
+        { name: "늑대", baseHp: 40, baseAtk: 12, baseDef: 2, expReward: 80 },
+    ];
 
     // ---------------------- UTILITY FUNCTIONS ----------------------
 
-    /**
-     * 전투 메시지를 로그 창에 기록합니다.
-     */
+    function getRandomGrade() {
+        const totalWeight = GRADE_MAP.reduce((sum, grade) => sum + grade.weight, 0);
+        let random = Math.random() * totalWeight;
+        for (const grade of GRADE_MAP) {
+            if (random < grade.weight) return grade;
+            random -= grade.weight;
+        }
+        return GRADE_MAP[GRADE_MAP.length - 1]; 
+    }
+
+    function calculateItemFinalStats(item, grade) {
+        const multiplier = grade.multiplier;
+        const finalAttack = Math.floor(item.baseAttack * multiplier);
+        const finalDefense = Math.floor(item.baseDefense * multiplier);
+        return { finalAttack, finalDefense };
+    }
+    
+    function initializeItemGrades() {
+        if (randomizedWeapons && randomizedArmors) return; 
+
+        randomizedWeapons = {};
+        Object.keys(baseWeapons).forEach(key => {
+            const grade = getRandomGrade();
+            const { finalAttack, finalDefense } = calculateItemFinalStats(baseWeapons[key], grade);
+            randomizedWeapons[key] = { ...baseWeapons[key], key, grade, finalAttack, finalDefense };
+        });
+
+        randomizedArmors = {};
+        Object.keys(baseArmors).forEach(key => {
+            const grade = getRandomGrade();
+            const { finalAttack, finalDefense } = calculateItemFinalStats(baseArmors[key], grade);
+            randomizedArmors[key] = { ...baseArmors[key], key, grade, finalAttack, finalDefense };
+        });
+        
+        logMessage("새로운 등급이 모든 장비에 무작위로 부여되었습니다. (세션 고정)", 'info');
+    }
+
+    function generateMonster(level) {
+        const base = MONSTERS[Math.floor(Math.random() * MONSTERS.length)];
+        // 레벨에 따라 몬스터 스탯 증가 (1레벨 당 20% 증가)
+        const multiplier = 1 + (level - 1) * 0.2; 
+        
+        return {
+            name: base.name,
+            hp: Math.floor(base.baseHp * multiplier),
+            maxHp: Math.floor(base.baseHp * multiplier),
+            attack: Math.floor(base.baseAtk * multiplier),
+            defense: Math.floor(base.baseDef * multiplier),
+            exp: Math.floor(base.expReward * multiplier),
+            level: level,
+        };
+    }
+
     function logMessage(message, type = 'info') {
+        if (!messageLogElement) return;
+
         const p = document.createElement('p');
         p.className = 'py-1 border-b border-gray-800 last:border-b-0';
         let color = 'text-gray-300';
-        if (type === 'attack') color = 'text-red-300'; 
-        if (type === 'move') color = 'text-blue-300'; 
-        if (type === 'win') color = 'text-green-400 font-bold';
-        if (type === 'loss') color = 'text-red-500 font-bold';
-        if (type === 'exp') color = 'text-yellow-300';
-        if (type === 'level') color = 'text-yellow-400 font-bold';
-        if (type === 'error') color = 'text-yellow-400';
+        if (type === 'start') color = 'text-green-400 font-bold';
+        if (type === 'error' || type === 'defeat') color = 'text-red-400 font-bold';
+        if (type === 'level-up') color = 'text-yellow-400 font-bold';
+        if (type === 'player-attack') color = 'text-pink-400';
+        if (type === 'monster-attack') color = 'text-red-300';
+        if (type === 'info') color = 'text-gray-400';
 
         p.innerHTML = `<span class="${color}">${message}</span>`;
         messageLogElement.prepend(p);
@@ -282,844 +350,545 @@
     }
     
     /**
-     * 플레이어의 스탯과 방어구 VIT 보너스를 기반으로 최대 HP를 계산합니다.
+     * 최종 스탯 (장비 + 분배된 스탯)을 계산하고 반환합니다.
+     * @returns {{finalStats: object, playerMaxHP: number, totalATK: number, totalDEF: number}}
      */
-    function calculateMaxHP(baseVit) {
-        let totalVit = baseVit;
-        if (gameState.selectedArmor) {
-            totalVit += gameState.selectedArmor.statBonus.VIT;
-        }
-        // 기본 100 + (총 활력 * 5)
-        return 100 + (totalVit * 5); 
-    }
-
-    /**
-     * 플레이어의 최종 공격력을 계산합니다. (무기 + 스탯)
-     */
-    function calculatePlayerAttack() {
-        if (!gameState.selectedWeapon) return 0;
-
-        const w = gameState.selectedWeapon;
-        const stats = gameState.baseStats;
-        const bonus = w.statBonus;
-
-        let totalAttack = w.attack;
-        
-        // 스탯 기반 보너스 계산
-        const effectiveSTR = stats.STR + bonus.STR;
-        const effectiveDEX = stats.DEX + bonus.DEX;
-
-        // 검: STR 3당 1 추가 공격력
-        if (w.baseKey === 'Sword') {
-            totalAttack += Math.floor(effectiveSTR / 3);
-        }
-        // 창: STR, DEX 5당 1 추가 공격력
-        else if (w.baseKey === 'Spear') {
-            totalAttack += Math.floor((effectiveSTR + effectiveDEX) / 5);
-        }
-        // 장궁: DEX 2당 1 추가 공격력
-        else if (w.baseKey === 'Bow') {
-            totalAttack += Math.floor(effectiveDEX / 2);
-        }
-
-        return totalAttack;
-    }
-
-    /**
-     * 플레이어의 최종 방어력을 계산합니다. (방어구 + 스탯)
-     */
-    function calculatePlayerDefense() {
-        if (!gameState.selectedArmor) return 0;
-
-        const a = gameState.selectedArmor;
-        const stats = gameState.baseStats;
-        const bonus = a.statBonus;
-
-        let totalDefense = a.defense;
-        
-        // 방어구 DEX 보너스 추가
-        const effectiveDEX = stats.DEX + bonus.DEX;
-        
-        // DEX 5당 1 추가 방어력
-        totalDefense += Math.floor(effectiveDEX / 5);
-        
-        return totalDefense;
-    }
-
-
-    // ---------------------- FIREBASE LOGIC ----------------------
-    
-    /**
-     * 게임 상태를 Firestore에 저장합니다.
-     */
-    async function saveGameState() {
-        if (!gameState.isAuthReady || !gameState.userId || !playerDocRef) return;
-
-        const dataToSave = {
-            level: gameState.level,
-            exp: gameState.exp,
-            expToNextLevel: gameState.expToNextLevel,
-            statPoints: gameState.statPoints,
-            baseStats: gameState.baseStats,
-            playerHP: gameState.playerHP,
-            playerMaxHP: gameState.playerMaxHP,
-            selectedWeaponKey: gameState.selectedWeapon ? gameState.selectedWeapon.key : null,
-            selectedArmorKey: gameState.selectedArmor ? gameState.selectedArmor.key : null, // 방어구 키 추가
-            lastPlayed: new Date().toISOString()
+    function calculateFinalStats() {
+        let finalStats = {
+            STR: gameState.baseStats.STR,
+            DEX: gameState.baseStats.DEX,
+            VIT: gameState.baseStats.VIT
         };
 
-        try {
-            await setDoc(playerDocRef, dataToSave, { merge: true });
-            console.log("Game state saved successfully.");
-        } catch (e) {
-            console.error("Error saving game state:", e);
-        }
-    }
+        let itemAttack = 0;
+        let itemDefense = 0;
 
-    /**
-     * Firestore에서 게임 상태를 로드하고 onSnapshot으로 구독합니다.
-     */
-    function loadGameState() {
-        if (!gameState.isAuthReady || !gameState.userId || !db) {
-            return;
+        if (gameState.selectedWeapon) {
+            finalStats.STR += gameState.selectedWeapon.statBonus.STR;
+            finalStats.DEX += gameState.selectedWeapon.statBonus.DEX;
+            finalStats.VIT += gameState.selectedWeapon.statBonus.VIT || 0;
+            itemAttack += gameState.selectedWeapon.finalAttack;
+            itemDefense += gameState.selectedWeapon.finalDefense;
         }
 
-        const docPath = `/artifacts/${appId}/users/${gameState.userId}/rpg_state/player_data`;
-        playerDocRef = doc(db, docPath);
+        if (gameState.selectedArmor) {
+            finalStats.STR += gameState.selectedArmor.statBonus.STR || 0;
+            finalStats.DEX += gameState.selectedArmor.statBonus.DEX;
+            finalStats.VIT += gameState.selectedArmor.statBonus.VIT;
+            itemAttack += gameState.selectedArmor.finalAttack;
+            itemDefense += gameState.selectedArmor.finalDefense;
+        }
 
-        // 실시간 업데이트 구독 (onSnapshot)
-        onSnapshot(playerDocRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const loadedData = docSnap.data();
-                console.log("Game state updated (from Firestore):", loadedData);
+        // 최종 능력치 계산 (STR: ATK 기여, DEX: DEF 기여, VIT: HP 기여)
+        const playerMaxHP = 100 + (finalStats.VIT * 5) + ((gameState.level - 1) * 20); // 레벨당 HP 보너스
+        const totalATK = itemAttack + Math.floor(finalStats.STR * 0.5); // STR 2당 공격력 1
+        const totalDEF = itemDefense + Math.floor(finalStats.DEX * 0.5); // DEX 2당 방어력 1
 
-                // 로드된 데이터로 gameState 업데이트
-                gameState.level = loadedData.level || 1;
-                gameState.exp = loadedData.exp || 0;
-                gameState.expToNextLevel = loadedData.expToNextLevel || 100;
-                gameState.statPoints = loadedData.statPoints || 0;
-                gameState.baseStats = loadedData.baseStats || { STR: 10, DEX: 10, VIT: 10 };
-                gameState.playerMaxHP = loadedData.playerMaxHP || 100;
-                gameState.playerHP = loadedData.playerHP || loadedData.playerMaxHP || 100;
-                
-                // 무기 로드
-                const loadedWeaponKey = loadedData.selectedWeaponKey;
-                if (loadedWeaponKey && availableWeapons[loadedWeaponKey]) {
-                    gameState.selectedWeapon = { ...availableWeapons[loadedWeaponKey], key: loadedWeaponKey };
-                } else {
-                    gameState.selectedWeapon = null;
-                }
-                
-                // 방어구 로드
-                const loadedArmorKey = loadedData.selectedArmorKey;
-                if (loadedArmorKey && availableArmors[loadedArmorKey]) {
-                    gameState.selectedArmor = { ...availableArmors[loadedArmorKey], key: loadedArmorKey };
-                } else {
-                    gameState.selectedArmor = null;
-                }
-                
-                // 로딩 후 첫 화면 결정
-                if (gameState.currentScreen === 'loading') {
-                    if (gameState.selectedWeapon && gameState.selectedArmor) {
-                        if (gameState.statPoints > 0) {
-                            showStatScreen();
-                        } else {
-                            showGameScreen();
-                        }
-                    } else {
-                        showSelectionScreen();
-                    }
-                }
-                
-                // UI 강제 업데이트
-                updateGameUI(); 
-            } else {
-                console.log("No player data found, starting fresh.");
-                if (gameState.currentScreen === 'loading') {
-                    showSelectionScreen();
-                }
-            }
-        }, (error) => {
-            console.error("Error subscribing to game state:", error);
-            // 에러 발생 시 로딩 종료
-            if (gameState.currentScreen === 'loading') {
-                showSelectionScreen();
-            }
-        });
+        return { finalStats, playerMaxHP, totalATK, totalDEF };
     }
 
-    /**
-     * Firebase 인증 상태 변경을 처리합니다.
-     */
+    function getPlayerStats() {
+        const { finalStats, playerMaxHP, totalATK, totalDEF } = calculateFinalStats();
+        return {
+            ...finalStats,
+            maxHP: playerMaxHP,
+            ATK: totalATK,
+            DEF: totalDEF
+        };
+    }
+    
+    // ---------------------- GAME FLOW & SCREEN MANAGEMENT ----------------------
+
     async function handleAuthChange(user) {
         if (user) {
             gameState.userId = user.uid;
-            userIdDisplay.textContent = user.uid;
-            gameState.isAuthReady = true;
-            loadGameState();
+            if (userIdDisplay) userIdDisplay.textContent = user.uid.substring(0, 8) + '...';
         } else {
-            console.log("No user signed in. Signing anonymously...");
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Anonymous sign-in failed:", error);
-                loadingScreen.innerHTML = '<p class="text-red-500">❌ 사용자 인증에 실패했습니다.</p>';
-            }
+            if (userIdDisplay) userIdDisplay.textContent = '익명 사용자';
+            gameState.userId = crypto.randomUUID(); 
         }
+
+        gameState.isAuthReady = true; 
+        
+        initializeItemGrades();
+        showSelectionScreen();
     }
 
-    // ---------------------- GAME FLOW & SCREEN MANAGEMENT ----------------------
 
     function showSelectionScreen() {
+        if (!selectionScreen) return;
         hideAllScreens();
         selectionScreen.classList.remove('hidden');
         gameState.currentScreen = 'selection';
-        createWeaponButtons();
-        createArmorButtons(); // 방어구 버튼 생성
-        // 기존 선택 항목 반영 및 버튼 상태 업데이트
+
+        createItemButtons(randomizedWeapons, 'weapon');
+        createItemButtons(randomizedArmors, 'armor');
+        
         if (gameState.selectedWeapon) {
-            selectWeapon(gameState.selectedWeapon.key, false);
+            updateSelectionVisuals('weapon', gameState.selectedWeapon.key);
         }
         if (gameState.selectedArmor) {
-            selectArmor(gameState.selectedArmor.key, false);
+            updateSelectionVisuals('armor', gameState.selectedArmor.key);
         }
+        updateItemDetails();
         checkStartButtonState();
     }
 
     function showStatScreen() {
+        if (!statScreen) return;
         hideAllScreens();
         statScreen.classList.remove('hidden');
         gameState.currentScreen = 'stat';
+
         renderStatAllocation();
+        checkContinueButtonState();
+        
+        logMessage(`스탯 분배 화면으로 이동! ${gameState.statPoints} 포인트를 분배하세요.`, 'info');
     }
 
     function showGameScreen() {
+        if (!gameScreen) return;
         hideAllScreens();
         gameScreen.classList.remove('hidden');
         gameState.currentScreen = 'playing';
-        // 게임 화면으로 전환될 때만 몬스터 위치 초기 설정
-        if (gameState.monsterDistance === 0) {
-            // 몬스터 위치 랜덤 설정 (1~5 거리)
-            gameState.monsterDistance = Math.floor(Math.random() * 5) + 1;
-            gameState.monster.hp = 20; 
-            logMessage(`새로운 전투 시작! ${gameState.monster.name}가 ${gameState.monsterDistance}m 거리에 나타났습니다!`, 'info');
+
+        const playerStats = getPlayerStats();
+
+        // HP 초기화 및 Max HP 설정
+        gameState.playerMaxHP = playerStats.maxHP;
+        if (gameState.currentHP <= 0 || gameState.currentHP > gameState.playerMaxHP) {
+            gameState.currentHP = gameState.playerMaxHP;
         }
-        updateGameUI();
+
+        // UI 업데이트
+        document.getElementById('player-level-display').textContent = gameState.level;
+        document.getElementById('final-str').textContent = playerStats.STR;
+        document.getElementById('final-dex').textContent = playerStats.DEX;
+        document.getElementById('final-vit').textContent = playerStats.VIT;
+        document.getElementById('final-atk').textContent = playerStats.ATK;
+        document.getElementById('final-def').textContent = playerStats.DEF;
+
+        updateHPBar();
+        updateEXPBar();
+        updateBattleUI(); // 몬스터 정보 숨김/표시 처리
+
+        logMessage("모험 시작! 전투가 가능합니다.", 'start');
     }
 
     function hideAllScreens() {
-        [loadingScreen, selectionScreen, statScreen, gameScreen].forEach(el => el.classList.add('hidden'));
+        [loadingScreen, selectionScreen, statScreen, gameScreen].forEach(el => {
+            if(el) el.classList.add('hidden');
+        });
     }
 
-    // ---------------------- SELECTION & START ----------------------
+    // ---------------------- SELECTION LOGIC ----------------------
 
-    /**
-     * 무기 선택 버튼을 생성하고 UI에 추가합니다.
-     */
-    function createWeaponButtons() {
-        weaponButtonsContainer.innerHTML = '';
-        Object.keys(availableWeapons).forEach(key => {
-            const weapon = availableWeapons[key];
+    function createItemButtons(items, type) {
+        const container = type === 'weapon' ? weaponButtonsContainer : armorButtonsContainer;
+        if (!container) return;
+        container.innerHTML = '';
+        
+        Object.keys(items).forEach(key => {
+            const item = items[key];
             const button = document.createElement('button');
-            button.className = 'weapon-btn bg-gray-700 text-white py-3 px-2 rounded-lg font-semibold hover:bg-teal-600 transition duration-150 ease-in-out border border-gray-600 text-sm';
-            button.innerHTML = `${weapon.icon} (${weapon.grade.charAt(0)}) ${weapon.name.split(' ')[0]}`; // 이름 축약
-            button.onclick = () => selectWeapon(key);
-            button.setAttribute('data-weapon-key', key);
-            weaponButtonsContainer.appendChild(button);
-        });
-    }
-    
-    /**
-     * 방어구 선택 버튼을 생성하고 UI에 추가합니다.
-     */
-    function createArmorButtons() {
-        armorButtonsContainer.innerHTML = '';
-        Object.keys(availableArmors).forEach(key => {
-            const armor = availableArmors[key];
-            const button = document.createElement('button');
-            button.className = 'armor-btn bg-gray-700 text-white py-3 px-2 rounded-lg font-semibold hover:bg-blue-600 transition duration-150 ease-in-out border border-gray-600 text-sm';
-            button.innerHTML = `${armor.icon} (${armor.grade.charAt(0)}) ${armor.name.split(' ')[0]}`; // 이름 축약
-            button.onclick = () => selectArmor(key);
-            button.setAttribute('data-armor-key', key);
-            armorButtonsContainer.appendChild(button);
+            const badgeColorClass = item.grade.tailwindClass.replace('grade-', 'border-');
+
+            button.className = `item-btn ${item.grade.tailwindClass} text-white py-3 px-2 rounded-lg font-semibold transition duration-150 ease-in-out text-sm`;
+            button.innerHTML = `
+                <div class="stat-badge bg-gray-900 border ${badgeColorClass} ${item.grade.color}">${item.grade.name}</div>
+                <div class="text-xl">${item.icon}</div>
+                <div class="font-bold">${item.name}</div>
+                <div class="text-xs text-yellow-300">ATK:${item.finalAttack}</div>
+                <div class="text-xs text-blue-300">DEF:${item.finalDefense}</div>
+            `;
+            button.onclick = () => selectItem(key, type);
+            button.setAttribute('data-item-key', key);
+            button.setAttribute('data-item-type', type);
+            container.appendChild(button);
         });
     }
 
-    /**
-     * 무기를 선택하고 UI를 업데이트합니다.
-     */
-    function selectWeapon(weaponKey, updateDetails = true) {
-        gameState.selectedWeapon = { ...availableWeapons[weaponKey], key: weaponKey };
+    function selectItem(itemKey, type) {
+        const items = type === 'weapon' ? randomizedWeapons : randomizedArmors;
+        const selectedItemData = items[itemKey]; 
+        
+        if (!selectedItemData) return;
 
-        document.querySelectorAll('.weapon-btn').forEach(btn => {
-            btn.classList.remove('selected-item');
-            btn.classList.add('bg-gray-700');
-        });
-        const selectedButton = document.querySelector(`[data-weapon-key="${weaponKey}"]`);
-        if (selectedButton) {
-            selectedButton.classList.remove('bg-gray-700');
-            selectedButton.classList.add('selected-item');
-        }
-
-        if (updateDetails) updateItemDetails();
-        checkStartButtonState();
-    }
-
-    /**
-     * 방어구를 선택하고 UI를 업데이트합니다.
-     */
-    function selectArmor(armorKey, updateDetails = true) {
-        gameState.selectedArmor = { ...availableArmors[armorKey], key: armorKey };
-
-        document.querySelectorAll('.armor-btn').forEach(btn => {
-            btn.classList.remove('selected-item');
-            btn.classList.add('bg-gray-700');
-        });
-        const selectedButton = document.querySelector(`[data-armor-key="${armorKey}"]`);
-        if (selectedButton) {
-            selectedButton.classList.remove('bg-gray-700');
-            selectedButton.classList.add('selected-item');
+        if (type === 'weapon') {
+            gameState.selectedWeapon = selectedItemData;
+        } else {
+            gameState.selectedArmor = selectedItemData;
         }
         
-        if (updateDetails) updateItemDetails();
-        checkStartButtonState();
+        updateSelectionVisuals(type, itemKey);
+        updateItemDetails(); 
+        checkStartButtonState(); 
     }
-    
-    /**
-     * 선택된 무기/방어구의 상세 정보를 표시합니다.
-     */
+
+    function updateSelectionVisuals(type, itemKey) {
+        const container = type === 'weapon' ? weaponButtonsContainer : armorButtonsContainer;
+        const selectedClass = type === 'weapon' ? 'selected-weapon' : 'selected-armor';
+
+        container.querySelectorAll('.item-btn').forEach(btn => {
+            btn.classList.remove(selectedClass); 
+        });
+        
+        const selectedButton = container.querySelector(`[data-item-key="${itemKey}"]`);
+        if (selectedButton) {
+            selectedButton.classList.add(selectedClass);
+        }
+    }
+
     function updateItemDetails() {
+        if (!itemDetails) return;
         let content = '';
         
         if (gameState.selectedWeapon) {
             const w = gameState.selectedWeapon;
-            const totalAttack = calculatePlayerAttack();
+            const gradeName = w.grade.name;
+            const gradeColor = w.grade.color;
             content += `
                 <div class="border-b border-gray-600 pb-2 mb-2">
-                    <p class="font-bold text-lg text-yellow-400">${w.icon} (${w.grade}) ${w.name}</p>
-                    <p>공격력: ${w.attack} (보정 포함: <span class="text-red-400 font-bold">${totalAttack}</span>)</p>
-                    <p>사거리: <span class="text-blue-400 font-bold">${w.range}m</span> | STR+${w.statBonus.STR}, DEX+${w.statBonus.DEX}</p>
+                    <p class="font-bold text-lg text-pink-400">${w.icon} ${w.name}</p>
+                    <p class="text-md">등급: <span class="font-bold ${gradeColor}">${gradeName}</span></p>
+                    <p>ATK: <span class="text-red-400 font-bold">${w.finalAttack}</span> | DEF: <span class="text-green-400 font-bold">${w.finalDefense}</span></p>
                     <p class="text-gray-300 text-sm">${w.desc}</p>
+                    <p class="text-xs text-gray-400">스탯 보너스: STR+${w.statBonus.STR || 0}, DEX+${w.statBonus.DEX || 0}, VIT+${w.statBonus.VIT || 0}</p>
                 </div>
             `;
         }
 
         if (gameState.selectedArmor) {
             const a = gameState.selectedArmor;
-            const totalDefense = calculatePlayerDefense();
+            const gradeName = a.grade.name;
+            const gradeColor = a.grade.color;
             content += `
                 <div>
-                    <p class="font-bold text-lg text-blue-400">${a.icon} (${a.grade}) ${a.name}</p>
-                    <p>방어력: ${a.defense} (보정 포함: <span class="text-green-400 font-bold">${totalDefense}</span>)</p>
-                    <p>VIT+${a.statBonus.VIT}, DEX+${a.statBonus.DEX}</p>
+                    <p class="font-bold text-lg text-blue-400">${a.icon} ${a.name}</p>
+                    <p class="text-md">등급: <span class="font-bold ${gradeColor}">${gradeName}</span></p>
+                    <p>ATK: <span class="text-red-400 font-bold">${a.finalAttack}</span> | DEF: <span class="text-green-400 font-bold">${a.finalDefense}</span></p>
                     <p class="text-gray-300 text-sm">${a.desc}</p>
+                    <p class="text-xs text-gray-400">스탯 보너스: STR+${a.statBonus.STR || 0}, DEX+${a.statBonus.DEX || 0}, VIT+${a.statBonus.VIT || 0}</p>
                 </div>
             `;
         }
 
         if (content === '') {
-            itemDetails.innerHTML = '<p class="text-center">장비를 선택하면 상세 정보가 표시됩니다.</p>';
+            itemDetails.innerHTML = '<p class="text-center">장비를 선택하면 최종 등급 및 상세 정보가 표시됩니다.</p>';
         } else {
             itemDetails.innerHTML = content;
         }
     }
 
 
-    /**
-     * 무기와 방어구가 모두 선택되었는지 확인하고 시작 버튼 상태를 업데이트합니다.
-     */
     function checkStartButtonState() {
+        if (!startButton) return;
         const canStart = gameState.selectedWeapon && gameState.selectedArmor;
         startButton.disabled = !canStart;
         startButton.classList.toggle('opacity-50', !canStart);
         startButton.classList.toggle('cursor-not-allowed', !canStart);
+        if (canStart) {
+            logMessage("무기와 방어구 선택 완료! '모험 시작!' 버튼을 눌러 스탯을 분배하세요.", 'info');
+        }
     }
 
-
-    /**
-     * 게임을 시작하거나 이미 로드된 상태로 진입합니다.
-     */
     function startGame() {
-        if (!gameState.selectedWeapon || !gameState.selectedArmor) {
-            logMessage("무기와 방어구를 모두 선택해주세요!", 'error');
-            return;
-        }
-
-        // 초기 시작 시, 현재 장비 및 기본 스탯 기반으로 HP 설정
-        if (gameState.level === 1 && gameState.exp === 0 && gameState.statPoints === 0) {
-            const initialMaxHP = calculateMaxHP(gameState.baseStats.VIT);
-            gameState.playerMaxHP = initialMaxHP;
-            gameState.playerHP = initialMaxHP;
-            logMessage(`캐릭터 생성 완료! 레벨 ${gameState.level}로 모험을 시작합니다.`, 'info');
-        }
-        
-        saveGameState();
-        
-        // 스탯 분배할 것이 있다면 스탯 화면으로 이동
-        if (gameState.statPoints > 0) {
-            showStatScreen();
-        } else {
-            showGameScreen();
-        }
+        if (!gameState.selectedWeapon || !gameState.selectedArmor) return;
+        showStatScreen();
     }
 
+    // ---------------------- STAT ALLOCATION LOGIC ----------------------
 
-    // ---------------------- STAT ALLOCATION ----------------------
-    
-    // 임시 스탯 객체 (분배 중인 스탯 저장)
-    let tempStats = {}; 
+    const statInfo = {
+        STR: { name: "힘 (STR)", desc: "공격력에 기여합니다." },
+        DEX: { name: "민첩 (DEX)", desc: "방어력 및 명중률에 기여합니다." },
+        VIT: { name: "활력 (VIT)", desc: "최대 HP에 기여합니다." }
+    };
 
     function renderStatAllocation() {
-        tempStats = { ...gameState.baseStats }; // 현재 스탯 복사
-        
-        statPointsDisplay.textContent = gameState.statPoints;
-        
+        if (!statsAllocation) return;
         statsAllocation.innerHTML = '';
-        const statKeys = ['STR', 'DEX', 'VIT'];
-        
-        statKeys.forEach(key => {
-            const statName = { 'STR': '힘(STR)', 'DEX': '민첩(DEX)', 'VIT': '활력(VIT)' }[key];
-            const statDesc = { 
-                'STR': '공격력에 영향을 줍니다.', 
-                'DEX': '공격력, 방어력, 명중률에 영향을 줍니다.', 
-                'VIT': '최대 체력(HP)을 증가시킵니다.' 
-            }[key];
+        document.getElementById('stat-points-display').textContent = gameState.statPoints;
 
-            const row = document.createElement('div');
-            row.className = 'flex items-center justify-between bg-gray-800 p-3 rounded-lg border border-gray-600';
-            row.innerHTML = `
-                <div>
-                    <p class="text-lg font-bold text-white">${statName}: <span id="stat-val-${key}">${tempStats[key]}</span></p>
-                    <p class="text-xs text-gray-400">${statDesc}</p>
+        const { finalStats } = calculateFinalStats();
+        
+        Object.keys(gameState.baseStats).forEach(statKey => {
+            const info = statInfo[statKey];
+            const statValue = gameState.baseStats[statKey];
+
+            const statRow = document.createElement('div');
+            statRow.className = 'flex items-center justify-between bg-gray-900 p-3 rounded-lg';
+            statRow.innerHTML = `
+                <div class="flex-1">
+                    <p class="text-lg font-bold text-gray-200">${info.name}</p>
+                    <p class="text-xs text-gray-500">${info.desc}</p>
                 </div>
-                <div class="flex space-x-2">
-                    <button data-stat="${key}" data-action="minus" class="stat-btn p-2 bg-red-600 rounded-full w-8 h-8 flex items-center justify-center font-bold hover:bg-red-700" disabled>-</button>
-                    <button data-stat="${key}" data-action="plus" class="stat-btn p-2 bg-green-600 rounded-full w-8 h-8 flex items-center justify-center font-bold hover:bg-green-700">+</button>
+                
+                <div class="flex items-center space-x-3">
+                    <button onclick="updateStat('${statKey}', -1)" id="dec-${statKey}"
+                        class="px-3 py-1 bg-red-500 rounded-md font-bold hover:bg-red-600 transition disabled:opacity-30">-</button>
+                    
+                    <div class="text-center w-16">
+                        <p class="text-2xl font-extrabold text-teal-400" id="current-${statKey}">${statValue}</p>
+                        <p class="text-xs text-gray-400" id="total-${statKey}">총합: ${finalStats[statKey]}</p>
+                    </div>
+
+                    <button onclick="updateStat('${statKey}', 1)" id="inc-${statKey}"
+                        class="px-3 py-1 bg-green-500 rounded-md font-bold hover:bg-green-600 transition disabled:opacity-30">+</button>
                 </div>
             `;
-            statsAllocation.appendChild(row);
-        });
-
-        // 이벤트 리스너 추가
-        statsAllocation.querySelectorAll('.stat-btn').forEach(button => {
-            button.addEventListener('click', handleStatChange);
+            statsAllocation.appendChild(statRow);
         });
         
-        checkStatButtonState();
+        updateStatButtons();
     }
+    
+    function updateStatButtons() {
+        const initialStat = 10 + (gameState.level - 1); // 레벨업 기본 스탯 증가 반영
+        const { finalStats } = calculateFinalStats();
 
-    function handleStatChange(event) {
-        const button = event.currentTarget;
-        const statKey = button.getAttribute('data-stat');
-        const action = button.getAttribute('data-action');
+        Object.keys(gameState.baseStats).forEach(statKey => {
+            const currentValue = gameState.baseStats[statKey];
+            const incBtn = document.getElementById(`inc-${statKey}`);
+            const decBtn = document.getElementById(`dec-${statKey}`);
+            const currentDisplay = document.getElementById(`current-${statKey}`);
+            const totalDisplay = document.getElementById(`total-${statKey}`);
+            
+            if (incBtn) incBtn.disabled = gameState.statPoints <= 0;
+            if (decBtn) decBtn.disabled = currentValue <= initialStat;
+            
+            if (currentDisplay) currentDisplay.textContent = currentValue;
+            if (totalDisplay) totalDisplay.textContent = `총합: ${finalStats[statKey]}`;
+        });
         
-        if (action === 'plus' && gameState.statPoints > 0) {
-            tempStats[statKey] += 1;
-            gameState.statPoints -= 1;
-        } else if (action === 'minus' && tempStats[statKey] > gameState.baseStats[statKey]) {
-            tempStats[statKey] -= 1;
-            gameState.statPoints += 1;
+        document.getElementById('stat-points-display').textContent = gameState.statPoints;
+        checkContinueButtonState();
+    }
+    
+    function updateStat(statKey, amount) {
+        const newPoints = gameState.statPoints - amount;
+        const newStatValue = gameState.baseStats[statKey] + amount;
+        const initialStat = 10 + (gameState.level - 1);
+
+        if (amount > 0) {
+            if (newPoints >= 0) {
+                gameState.statPoints = newPoints;
+                gameState.baseStats[statKey] = newStatValue;
+                logMessage(`${statInfo[statKey].name} +1`, 'info');
+            }
+        } else {
+            if (newStatValue >= initialStat) {
+                gameState.statPoints = newPoints; 
+                gameState.baseStats[statKey] = newStatValue;
+                logMessage(`${statInfo[statKey].name} -1`, 'info');
+            }
         }
 
-        document.getElementById(`stat-val-${statKey}`).textContent = tempStats[statKey];
-        statPointsDisplay.textContent = gameState.statPoints;
-        checkStatButtonState();
+        updateStatButtons();
     }
 
-    function checkStatButtonState() {
-        const pointsLeft = gameState.statPoints;
-        const originalStats = gameState.baseStats;
+    function checkContinueButtonState() {
+        if (!continueButton) return;
+        const canContinue = gameState.statPoints === 0;
+        continueButton.disabled = !canContinue;
+        continueButton.classList.toggle('opacity-50', !canContinue);
+        continueButton.classList.toggle('cursor-not-allowed', !canContinue);
         
-        // 플러스 버튼 활성화/비활성화
-        statsAllocation.querySelectorAll('[data-action="plus"]').forEach(btn => {
-            btn.disabled = pointsLeft <= 0;
-            btn.classList.toggle('opacity-50', pointsLeft <= 0);
-        });
-
-        // 마이너스 버튼 활성화/비활성화
-        statsAllocation.querySelectorAll('[data-action="minus"]').forEach(btn => {
-            const statKey = btn.getAttribute('data-stat');
-            const isDisabled = tempStats[statKey] <= originalStats[statKey];
-            btn.disabled = isDisabled;
-            btn.classList.toggle('opacity-50', isDisabled);
-        });
-
-        // 완료 버튼 활성화 (포인트가 0일 때)
-        continueButton.disabled = pointsLeft > 0;
-        continueButton.classList.toggle('opacity-50', pointsLeft > 0);
+        if (canContinue) {
+            logMessage("모든 포인트가 분배되었습니다. '분배 완료' 버튼을 누르세요.", 'start');
+        }
     }
 
     function saveStatsAndContinue() {
-        if (gameState.statPoints > 0) {
-            logMessage("남은 포인트를 모두 분배해야 합니다.", 'error');
+        if (gameState.statPoints !== 0) {
+            logMessage("남은 스탯 포인트를 모두 분배해야 합니다!", 'error');
             return;
         }
-
-        // 스탯 적용
-        gameState.baseStats = { ...tempStats };
-        
-        // 최대 HP 재계산 및 현재 HP 회복
-        const newMaxHP = calculateMaxHP(gameState.baseStats.VIT);
-        gameState.playerMaxHP = newMaxHP;
-        gameState.playerHP = newMaxHP;
-        
-        logMessage(`스탯 분배 완료! 레벨 ${gameState.level}, 최대 HP ${gameState.playerMaxHP}가 되었습니다.`, 'level');
-        saveGameState();
         showGameScreen();
     }
 
+    // ---------------------- BATTLE LOGIC ----------------------
+    
+    function updateHPBar() {
+        const currentHP = Math.max(0, gameState.currentHP);
+        const playerHPPercent = (currentHP / gameState.playerMaxHP) * 100;
 
-    // ---------------------- GAMEPLAY & COMBAT ----------------------
-
-    /**
-     * 플레이어의 행동을 처리하고 몬스터 턴을 진행합니다.
-     */
-    function handleAction(action) {
-        if (action === 'reset') {
-            resetGame();
-            return;
-        }
-        
-        if (checkGameEnd()) {
-            logMessage('게임이 이미 종료되었습니다. 재시작하거나 다음 전투를 시작하세요.', 'error');
-            return;
-        }
-        
-        let playerTurnSuccess = false;
-
-        if (action === 'attack') {
-            playerTurnSuccess = attackMonster();
-        } else if (action === 'move_closer') {
-            playerTurnSuccess = movePlayer('closer');
-        } else if (action === 'move_away') {
-            playerTurnSuccess = movePlayer('away');
-        }
-
-        // 플레이어 턴이 성공하고 몬스터가 아직 살아있다면 몬스터 턴 진행
-        if (playerTurnSuccess) {
-            if (!checkGameEnd()) { 
-                monsterTurn();
-            }
-        }
-        
-        updateGameUI();
+        document.getElementById('current-hp-display').textContent = currentHP;
+        document.getElementById('final-hp').textContent = gameState.playerMaxHP;
+        document.getElementById('hp-bar-fill').style.width = `${playerHPPercent}%`;
     }
 
-    /**
-     * 몬스터에게 공격을 시도합니다.
-     */
-    function attackMonster() {
-        const weapon = gameState.selectedWeapon;
-        const distance = gameState.monsterDistance;
-
-        if (distance > weapon.range) {
-            logMessage(`⚔️ 몬스터가 너무 멀리 있습니다! (사거리 ${weapon.range}m, 현재 거리 ${distance}m)`, 'error');
-            return false;
-        }
-
-        const totalAttack = calculatePlayerAttack();
-        // 공격력 ± 2의 랜덤 데미지
-        const rawDamage = totalAttack + Math.floor(Math.random() * 5) - 2; 
+    function updateEXPBar() {
+        const playerEXPPercent = (gameState.currentEXP / gameState.requiredEXP) * 100;
         
-        gameState.monster.hp -= rawDamage;
-
-        if (gameState.monster.hp < 0) {
-            gameState.monster.hp = 0;
-        }
-
-        logMessage(`💥 당신의 ${weapon.name}(이)가 ${gameState.monster.name}에게 <span class="text-red-400 font-bold">${rawDamage}</span>의 피해를 입혔습니다!`, 'attack');
-        return true;
+        document.getElementById('player-level-display').textContent = gameState.level;
+        document.getElementById('current-exp-display').textContent = gameState.currentEXP;
+        document.getElementById('required-exp-display').textContent = gameState.requiredEXP;
+        document.getElementById('exp-bar-fill').style.width = `${Math.min(100, playerEXPPercent)}%`;
     }
 
-    /**
-     * 몬스터의 턴을 처리합니다.
-     */
-    function monsterTurn() {
-        const distance = gameState.monsterDistance;
-        const monster = gameState.monster;
-        const monsterRange = 1;
-
-        if (distance <= monsterRange) {
-            // 몬스터 공격
-            const rawDamage = monster.attack + Math.floor(Math.random() * 3);
-            const playerDefense = calculatePlayerDefense();
+    function updateBattleUI() {
+        if (currentMonster) {
+            const m = currentMonster;
+            const monsterHPPercent = (m.hp / m.maxHp) * 100;
             
-            // 데미지 계산: (몬스터 공격력 - 방어력). 최소 1 데미지
-            const finalDamage = Math.max(1, rawDamage - playerDefense);
-
-            gameState.playerHP -= finalDamage;
-            
-            if (gameState.playerHP < 0) {
-                gameState.playerHP = 0;
-            }
-
-            logMessage(`🔪 ${monster.name}의 공격! 방어력(<span class="text-green-400">${playerDefense}</span>)으로 막아 ${finalDamage}의 피해를 입었습니다!`, 'loss');
+            monsterArea.classList.remove('hidden');
+            document.getElementById('monster-name-display').textContent = m.name;
+            document.getElementById('monster-level-display').textContent = m.level;
+            document.getElementById('monster-hp-display').textContent = Math.max(0, m.hp);
+            document.getElementById('monster-max-hp-display').textContent = m.maxHp;
+            document.getElementById('monster-hp-bar').style.width = `${Math.max(0, monsterHPPercent)}%`;
         } else {
-            // 몬스터 접근
-            gameState.monsterDistance -= 1;
-            if (gameState.monsterDistance < 1) gameState.monsterDistance = 1;
-
-            logMessage(`🏃 ${monster.name}이(가) 당신에게 접근합니다. (현재 거리: ${gameState.monsterDistance}m)`, 'attack');
+            monsterArea.classList.add('hidden');
         }
     }
 
-    /**
-     * 경험치 획득 및 레벨업 확인을 처리합니다.
-     */
-    function gainExperience(amount) {
-        logMessage(`✨ 경험치 ${amount}을 획득했습니다!`, 'exp');
-        gameState.exp += amount;
+    function fightMonster() {
+        if (gameState.currentHP <= 0) {
+            logMessage("당신은 쓰러졌습니다. 재시작하세요.", 'error');
+            return;
+        }
+
+        if (fightButton) fightButton.disabled = true; // 전투 중 버튼 비활성화
+
+        if (!currentMonster) {
+            currentMonster = generateMonster(gameState.level);
+            logMessage(`야생의 레벨 ${currentMonster.level} ${currentMonster.name}이(가) 나타났습니다! (HP: ${currentMonster.hp})`, 'start');
+            updateBattleUI();
+            if (fightButton) fightButton.disabled = false;
+            return;
+        }
         
-        while (gameState.exp >= gameState.expToNextLevel) {
-            gameState.exp -= gameState.expToNextLevel;
+        const playerStats = getPlayerStats();
+        
+        // ---------------- Player Turn ----------------
+        const damageToMonster = Math.max(1, playerStats.ATK - currentMonster.defense);
+        currentMonster.hp -= damageToMonster;
+
+        logMessage(`당신이 ${currentMonster.name}에게 ${damageToMonster}의 피해를 입혔습니다. (남은 HP: ${Math.max(0, currentMonster.hp)})`, 'player-attack');
+        updateBattleUI();
+
+        if (currentMonster.hp <= 0) {
+            handleMonsterDefeat(currentMonster);
+            currentMonster = null;
+            if (fightButton) fightButton.disabled = false;
+            updateBattleUI(); // 몬스터 영역 숨김
+            return;
+        }
+
+        // ---------------- Monster Turn ----------------
+        const damageToPlayer = Math.max(1, currentMonster.attack - playerStats.DEF);
+        gameState.currentHP -= damageToPlayer;
+        
+        logMessage(`${currentMonster.name}이(가) 당신에게 ${damageToPlayer}의 피해를 입혔습니다. (남은 HP: ${Math.max(0, gameState.currentHP)})`, 'monster-attack');
+        updateHPBar();
+
+        if (gameState.currentHP <= 0) {
+            handlePlayerDefeat();
+            currentMonster = null;
+            if (fightButton) fightButton.disabled = false;
+            updateBattleUI();
+        } else {
+            if (fightButton) fightButton.disabled = false; // 다음 턴 준비
+        }
+    }
+
+    function handleMonsterDefeat(monster) {
+        logMessage(`${monster.name}을(를) 물리쳤습니다! EXP ${monster.exp} 획득!`, 'start');
+        
+        gameState.currentEXP += monster.exp;
+        checkLevelUp();
+    }
+
+    function handlePlayerDefeat() {
+        logMessage("당신은 쓰러졌습니다. HP가 1로 회복됩니다. 재정비하세요.", 'defeat');
+        gameState.currentHP = 1; 
+        updateHPBar();
+    }
+
+    function checkLevelUp() {
+        while (gameState.currentEXP >= gameState.requiredEXP) {
+            gameState.currentEXP -= gameState.requiredEXP;
             gameState.level += 1;
-            gameState.statPoints += 3; // 레벨업 당 3 스탯 포인트 지급
-            gameState.expToNextLevel = Math.floor(gameState.expToNextLevel * 1.5); // 다음 레벨 요구 경험치 증가
             
-            logMessage(`🎉 레벨업! 레벨 ${gameState.level} 달성! 스탯 포인트 3을 얻었습니다.`, 'level');
+            // 다음 레벨 경험치 요구량 (간단 계산: 100, 120, 140...)
+            gameState.requiredEXP = 100 + (gameState.level - 1) * 20;
+
+            // 레벨업 보너스: 기본 스탯 +1 및 분배 포인트 +3
+            gameState.baseStats.STR += 1;
+            gameState.baseStats.DEX += 1;
+            gameState.baseStats.VIT += 1;
+            gameState.statPoints += 3;
+
+            logMessage(`레벨업! 레벨 ${gameState.level} 달성! 스탯이 증가하고 포인트 3개를 얻었습니다.`, 'level-up');
+            
+            // HP 최대치 갱신
+            const playerStats = getPlayerStats();
+            gameState.playerMaxHP = playerStats.maxHP;
+            gameState.currentHP = gameState.playerMaxHP;
+            updateHPBar();
+            
+            // 스탯 재분배 화면으로 이동
+            showStatScreen();
+            return; 
         }
-        saveGameState();
+        updateEXPBar();
     }
 
-    /**
-     * 게임 종료 조건을 확인하고, 종료되었으면 UI를 업데이트합니다.
-     */
-    function checkGameEnd() {
-        const actionButtons = actionButtonsContainer.querySelectorAll('button');
-
-        if (gameState.monster.hp <= 0) {
-            // 몬스터 처치 시
-            const message = `${gameState.monster.name}를(을) 물리쳤습니다! 당신의 승리입니다! 🎉`;
-            logMessage(message, 'win');
-            instructionText.innerHTML = `<h3 class="text-2xl text-green-400 font-bold">승리!</h3><p class="mt-2 text-white">${message} <span class="text-yellow-300">경험치를 획득</span>합니다. '다음 전투 계속'을 눌러 다음 모험을 준비하세요.</p>`;
-            
-            // 경험치 획득
-            if (gameState.monster.expReward > 0) {
-                gainExperience(gameState.monster.expReward);
-                gameState.monster.expReward = 0; // 중복 획득 방지
-            }
-
-            actionButtons.forEach(btn => btn.disabled = true);
-            const resetButton = actionButtonsContainer.querySelector('button:last-child');
-            if(resetButton) resetButton.disabled = false;
-            
-            // 레벨업 직후 스탯 포인트가 있다면 스탯 화면으로 강제 이동
-            if (gameState.statPoints > 0) {
-                showStatScreen();
-            }
-
-            return true;
-        }
-
-        if (gameState.playerHP <= 0) {
-            const message = `당신은 ${gameState.monster.name}에게 패배했습니다. 😢`;
-            logMessage(message, 'loss');
-            instructionText.innerHTML = `<h3 class="text-2xl text-red-400 font-bold">패배!</h3><p class="mt-2 text-white">${message} '포기 및 재시작' 버튼을 눌러 다시 도전하세요.</p>`;
-            actionButtons.forEach(btn => btn.disabled = true);
-            const resetButton = actionButtonsContainer.querySelector('button:last-child');
-            if(resetButton) resetButton.disabled = false;
-            saveGameState();
-            return true;
-        }
-        
-        // 게임 진행 중일 경우
-        actionButtons.forEach(btn => {
-            if (!btn.textContent.includes('재시작') && !btn.textContent.includes('전투 계속')) {
-                 btn.disabled = false;
-            }
-        });
-        return false;
-    }
-
-    /**
-     * 다음 몬스터를 준비하거나 게임을 초기 상태로 되돌립니다.
-     */
-    function resetGame() {
-        if (gameState.playerHP <= 0) {
-             // 패배 시 (초기 상태로 리셋)
-            logMessage("게임 상태를 초기화합니다.", 'info');
-            
-            // Firebase 데이터 삭제는 하지 않고, 기본값으로 덮어쓰기 (재시작)
-            gameState.level = 1;
-            gameState.exp = 0;
-            gameState.expToNextLevel = 100;
-            gameState.statPoints = 0;
-            gameState.baseStats = { STR: 10, DEX: 10, VIT: 10 };
-            gameState.selectedWeapon = null; // 무기 재선택
-            gameState.selectedArmor = null; // 방어구 재선택
-            
-            // 초기화 후 저장
-            saveGameState(); 
-
-            // 화면 전환
-            gameState.monsterDistance = 0;
-            gameState.monster.hp = 20;
-            messageLogElement.innerHTML = '<p class="text-gray-400 py-1">전투 로그가 여기에 표시됩니다.</p>';
-            showSelectionScreen();
-
-        } else {
-            // 승리 후 다음 전투 (전투 계속)
-            logMessage("다음 몬스터와 전투를 준비합니다.", 'info');
-            gameState.monsterDistance = Math.floor(Math.random() * 5) + 1;
-            gameState.monster.hp = 20 + gameState.level * 5; // 레벨에 따라 몬스터 강화
-            gameState.monster.attack = 5 + Math.floor(gameState.level / 2);
-            gameState.monster.expReward = 50 + gameState.level * 20;
-
-            gameState.playerHP = gameState.playerMaxHP; // HP 회복
-            
-            logMessage(`전투 재개! ${gameState.monster.name} (HP: ${gameState.monster.hp})가 ${gameState.monsterDistance}m 거리에 나타났습니다!`, 'info');
-            updateGameUI();
-        }
-    }
-
-
-    // ---------------------- UI UPDATES ----------------------
-
-    /**
-     * 현재 게임 상태를 기반으로 UI를 업데이트합니다.
-     */
-    function updateGameUI() {
-        if (gameState.currentScreen !== 'playing') return;
-        if (!gameState.selectedWeapon || !gameState.selectedArmor) return;
-
-        const weapon = gameState.selectedWeapon;
-        const armor = gameState.selectedArmor;
-        const monster = gameState.monster;
-        
-        const totalAttack = calculatePlayerAttack();
-        const totalDefense = calculatePlayerDefense();
-
-        const weaponColor = { 'Common': 'text-gray-400', 'Uncommon': 'text-yellow-400', 'Rare': 'text-red-400' }[weapon.grade] || 'text-white';
-        const armorColor = { 'Common': 'text-gray-400', 'Uncommon': 'text-yellow-400', 'Rare': 'text-blue-400' }[armor.grade] || 'text-white';
-        
-        // 1. 상태 디스플레이 업데이트
-        statusDisplay.innerHTML = `
-            <div class="text-gray-300">레벨/EXP:</div>
-            <div class="text-yellow-400 font-bold">${gameState.level} / ${gameState.expToNextLevel}</div>
-            
-            <div class="text-gray-300">HP:</div>
-            <div class="text-green-400 font-bold">${gameState.playerHP} / ${gameState.playerMaxHP}</div>
-            
-            <div class="text-gray-300">공격력:</div>
-            <div class="text-red-400 font-bold">${totalAttack}</div>
-            
-            <div class="text-gray-300">방어력:</div>
-            <div class="text-blue-400 font-bold">${totalDefense}</div>
-
-            <div class="text-gray-300">무기:</div>
-            <div class="${weaponColor} font-bold">${weapon.icon} (${weapon.grade.charAt(0)}) ${weapon.name}</div>
-            
-            <div class="text-gray-300">방어구:</div>
-            <div class="${armorColor} font-bold">${armor.icon} (${armor.grade.charAt(0)}) ${armor.name}</div>
-            
-            <div class="text-gray-300">몬스터 체력:</div>
-            <div class="text-red-400 font-bold">${monster.hp}</div>
-
-            <div class="text-gray-300">남은 거리:</div>
-            <div class="text-yellow-400 font-bold">${gameState.monsterDistance}m</div>
-        `;
-        
-        // EXP 바 업데이트
-        const expPercent = Math.min(100, (gameState.exp / gameState.expToNextLevel) * 100);
-        document.getElementById('exp-progress').style.width = `${expPercent}%`;
-        document.getElementById('exp-text').textContent = `EXP: ${gameState.exp} / ${gameState.expToNextLevel}`;
-
-        // 몬스터 정보
-        monsterIcon.textContent = monster.emoji;
-        monsterInfo.textContent = `${monster.name} (HP: ${monster.hp}, 공격력: ${monster.attack})가 ${gameState.monsterDistance}m 거리에 있습니다!`;
-
-        // 2. 행동 버튼 업데이트
-        actionButtonsContainer.innerHTML = `
-            <button onclick="handleAction('attack')" class="py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-150">
-                🗡️ 공격
-            </button>
-            <button onclick="handleAction('move_closer')" class="py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition duration-150">
-                ➡️ 접근 (1m)
-            </button>
-            <button onclick="handleAction('move_away')" class="py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-150">
-                ⬅️ 거리 벌리기 (1m)
-            </button>
-            <button onclick="handleAction('reset')" class="py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition duration-150">
-                ${gameState.monster.hp <= 0 ? '다음 전투 계속' : '포기 및 재시작'}
-            </button>
-        `;
-
-        // 3. 행동 지침 생성 및 표시
-        instructionText.innerHTML = getInstructions(weapon, gameState.monsterDistance);
-        
-        // 4. 게임 종료 상태 체크
-        checkGameEnd();
-    }
-
-    /**
-     * 현재 상황에 맞는 행동 지침 텍스트를 생성합니다.
-     */
-    function getInstructions(weapon, distance) {
-        let instructions = [];
-        if (!weapon) return '<strong class="text-red-500">오류: 무기가 선택되지 않았습니다.</strong>';
-        
-        const weaponRange = weapon.range;
-
-        instructions.push(`<strong>Level ${gameState.level}</strong>의 당신의 눈앞에 <strong>${gameState.monster.name}</strong>이(가) 나타났습니다.`);
-        instructions.push(`몬스터는 ${distance}m 거리에 있습니다.`);
-
-        if (distance <= weaponRange) {
-            instructions.push('<strong class="text-red-400">🚨 공격 가능 거리입니다!</strong>');
-            instructions.push('당신의 ' + weapon.name + ' (사거리 ' + weaponRange + 'm)는 몬스터에게 효과적으로 닿습니다. <span class="text-yellow-300 font-bold">\'공격\'</span>을 선택하세요.');
-            if (weaponRange > 1) {
-                instructions.push('긴 사거리를 활용하여 공격하거나 <span class="text-green-300 font-bold">\'거리 벌리기\'</span>를 고려하세요.');
-            }
-        } else {
-            instructions.push('<strong class="text-blue-400">🚶 접근이 필요합니다.</strong>');
-            instructions.push('몬스터가 당신의 사거리 밖에 있습니다. <span class="text-blue-300 font-bold">\'접근\'</span> 행동으로 거리를 좁혀야 합니다.');
-        }
-        
-        if (distance <= 2) {
-            instructions.push('<strong class="text-red-500">🔥 몬스터가 매우 가깝습니다!</strong> 몬스터는 다음 턴에 공격할 가능성이 높습니다. 방어력과 HP를 확인하고 신중하게 움직이세요.');
-        }
-
-        return `<ul class="list-disc list-inside space-y-2 pl-2">${instructions.map(item => `<li>${item}</li>`).join('')}</ul>`;
-    }
 
     // ---------------------- INITIALIZATION ----------------------
 
-    window.movePlayer = function(direction) {
-        let newDistance = gameState.monsterDistance;
-        
-        if (direction === 'closer' && newDistance > 1) {
-            newDistance -= 1;
-            logMessage(`➡️ 몬스터에게 1m 접근했습니다. (남은 거리: ${newDistance}m)`, 'move');
-        } else if (direction === 'closer' && newDistance === 1) {
-            logMessage('더 이상 접근할 수 없습니다. 이미 근접 거리입니다.', 'error');
-            return false;
-        } else if (direction === 'away' && newDistance < 5) {
-            newDistance += 1;
-            logMessage(`⬅️ 몬스터에게서 1m 거리를 벌렸습니다. (남은 거리: ${newDistance}m)`, 'move');
-        } else if (direction === 'away' && newDistance === 5) {
-            logMessage('더 이상 멀어질 수 없습니다. 최대 거리입니다.', 'error');
-            return false;
-        } else {
-            return false;
-        }
-        
-        gameState.monsterDistance = newDistance;
-        return true;
-    }
-    
-    // 글로벌 함수 등록 (HTML에서 직접 호출 가능하도록)
+    // 글로벌 함수 등록
     window.startGame = startGame;
-    window.selectWeapon = selectWeapon;
-    window.selectArmor = selectArmor;
-    window.handleAction = handleAction;
+    window.selectItem = selectItem;
+    window.updateStat = updateStat;
     window.saveStatsAndContinue = saveStatsAndContinue;
+    window.fightMonster = fightMonster;
+    
+    // 임시 액션 핸들러
+    window.handleAction = (action) => {
+        if (action === 'reset') {
+            // 게임 상태 초기화
+            gameState.selectedWeapon = null;
+            gameState.selectedArmor = null;
+            gameState.level = 1;
+            gameState.statPoints = 5;
+            gameState.baseStats = { STR: 10, DEX: 10, VIT: 10 };
+            gameState.currentEXP = 0;
+            gameState.requiredEXP = 100;
+            currentMonster = null;
+
+            showSelectionScreen();
+            logMessage("게임을 처음부터 다시 시작합니다. 장비를 선택하세요.", 'info');
+        }
+    };
 
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Firebase 인증 리스너 시작
+        // 모든 DOM 요소 초기화
+        userIdDisplay = document.getElementById('user-id-display');
+        loadingScreen = document.getElementById('loading-screen');
+        selectionScreen = document.getElementById('selection-screen');
+        statScreen = document.getElementById('stat-screen');
+        gameScreen = document.getElementById('game-screen');
+        weaponButtonsContainer = document.getElementById('weapon-selection-buttons');
+        armorButtonsContainer = document.getElementById('armor-selection-buttons');
+        itemDetails = document.getElementById('item-details');
+        startButton = document.getElementById('start-button');
+        statPointsDisplay = document.getElementById('stat-points-display');
+        statsAllocation = document.getElementById('stats-allocation');
+        continueButton = document.getElementById('continue-button');
+        messageLogElement = document.getElementById('message-log');
+        
+        fightButton = document.getElementById('fight-button');
+        monsterArea = document.getElementById('monster-area');
+
+
+        // Firebase 인증 또는 시뮬레이션
         if (auth) {
-            onAuthStateChanged(auth, handleAuthChange);
+            auth.onAuthStateChanged(handleAuthChange);
         } else {
-            console.error("Auth object is null. Cannot initialize game.");
+            handleAuthChange(null); // Firebase 미사용 시 즉시 초기화
         }
     });
 
